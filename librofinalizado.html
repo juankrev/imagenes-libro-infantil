@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>El Secreto del Abuelo</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Custom fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Open Sans', sans-serif; }
+        h1, .font-fredoka { font-family: 'Fredoka One', cursive; }
+        .custom-scrollbar::-webkit-scrollbar { width: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #e0f2f7; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #80DEEA; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #4DD0E1; }
+        @keyframes pulse-once { 0% { transform: scale(1); } 50% { transform: scale(1.03); } 100% { transform: scale(1); } }
+        .animate-pulse-once { animation: pulse-once 0.5s ease-out; }
+        @keyframes scale-in { from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        @keyframes scale-out { from { transform: scale(1); opacity: 1; } to { transform: scale(0); opacity: 0; } }
+        .animate-scale-in { animation: scale-in 0.3s ease-out forwards; }
+        .animate-scale-out { animation: scale-out 0.3s ease-in forwards; }
+        #magnifier-lens {
+            width: 150px; height: 150px; border-radius: 50%; border: 4px solid #3b82f6;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.5); position: absolute; pointer-events: none;
+            overflow: hidden; background-repeat: no-repeat; transform: translate(-50%, -50%);
+            transition: opacity 0.2s ease-in-out; opacity: 0; background-color: rgba(255, 255, 255, 0.1);
+            cursor: none;
+        }
+        #magnifier-lens.active { opacity: 1; }
+        #intro-screen {
+            background-image: url('https://github.com/juankrev/imagenes-libro-infantil/blob/main/id%20intro.png?raw=true');
+            background-size: cover; background-position: center; background-repeat: no-repeat; position: relative;
+        }
+        #intro-screen::before {
+            content: ''; position: absolute; inset: 0; background-color: rgba(0, 0, 0, 0.4);
+            border-radius: 2rem; z-index: 0;
+        }
+        #intro-screen > * { position: relative; z-index: 1; }
+        #intro-screen h1, #intro-screen p, #intro-screen label { color: white; text-shadow: 2px 2px 4px rgba(0,0,0,0.5); }
+        #intro-screen .bg-white { background-color: rgba(255, 255, 255, 0.85); color: #333; }
+        #intro-screen .bg-white label { color: #333; text-shadow: none; }
+    </style>
+    <script type="module">
+        // Game state variables
+        let userName = '';
+        let currentPageIndex = 0;
+        let pathTaken = ''; // 'pueblo' or 'guardian'
+
+        const storyData = [
+            // 0: Intro
+            {
+                id: 'intro',
+                text: 'Bienvenido a "El Secreto del Abuelo". Antes de comenzar, cuéntanos, ¿cómo te llamas?',
+                image: '',
+            },
+            // 1: The Main Choice
+            {
+                id: 'page1_mapa',
+                text: 'El abuelo te recibe. "¡Bienvenido, [userName]! Mi secreto está tejido en este lugar. Tienes dos grandes caminos para descubrirlo. ¿Qué quieres explorar?"',
+                image: 'https://github.com/juankrev/imagenes-libro-infantil/blob/main/id%20page1_mapa.png?raw=true',
+                choices: [
+                    { text: 'Descubrir la historia del pueblo', nextPageIndex: 2, path: 'pueblo' },
+                    { text: 'Seguir el sendero oculto', nextPageIndex: 11, path: 'guardian' }
+                ]
+            },
+            // --- PATH 1: LEGADO DEL PUEBLO (Fusionado) ---
+            { // 2
+                id: 'pueblo_start',
+                text: 'Tu aventura comienza en la plaza, el corazón del pueblo. Te encuentras con una anciana de sonrisa amable que vende flores.',
+                image: 'https://github.com/juankrev/imagenes-libro-infantil/blob/main/id%20page3_plaza.png?raw=true',
+                choices: [{ text: 'Preguntar a la anciana por el abuelo', nextPageIndex: 3 }]
+            },
+            { // 3
+                id: 'pueblo_anciana_pista1',
+                text: '"Tu abuelo creía que el pasado susurraba en el presente", dice la anciana. "El primer eco de su historia te espera donde el agua canta sin cesar. Busca allí una señal."',
+                image: 'https://github.com/juankrev/imagenes-libro-infantil/blob/main/id%20page5_anciana.png?raw=true',
+                choices: [{ text: 'Ir al río', nextPageIndex: 4 }]
+            },
+            { // 4
+                id: 'pueblo_rio',
+                text: 'La pista te lleva al río. Buscando en la orilla, no encuentras una moneda, sino una piedra lisa con un grabado: una cascada y una luna.',
+                image: 'https://github.com/juankrev/imagenes-libro-infantil/blob/main/id%20page2_rio.png?raw=true',
+                choices: [{ text: 'Seguir el río hacia la cascada', nextPageIndex: 5 }]
+            },
+            { // 5
+                id: 'pueblo_cascada',
+                text: 'Llegas a la gran cascada. El grabado de la luna en la piedra te hace recordar las historias del abuelo sobre la "Flor de Luna", una flor que solo crece en lugares especiales y revela secretos.',
+                image: 'https://github.com/juankrev/imagenes-libro-infantil/blob/main/id%20page4_cascada.png?raw=true',
+                choices: [{ text: 'Buscar la Flor de Luna', nextPageIndex: 6 }]
+            },
+            { // 6
+                id: 'pueblo_flor_luna',
+                text: 'Buscas alrededor y, efectivamente, encuentras una Flor de Luna. Su luz mágica revela una entrada oculta tras la cortina de agua: una cueva secreta.',
+                image: 'https://github.com/juankrev/imagenes-libro-infantil/blob/main/id%20%20page7_alrededores_cascada.png?raw=true',
+                choices: [{ text: 'Entrar en la cueva', nextPageIndex: 7 }]
+            },
+            { // 7
+                id: 'pueblo_cueva',
+                text: 'Dentro de la cueva, la luz de la flor ilumina las paredes, cubiertas de grabados que cuentan la historia del pueblo. En el centro de la historia, hay un dibujo del Gran Roble Sabio.',
+                image: 'https://github.com/juankrev/imagenes-libro-infantil/blob/main/id%20%20page6_cueva.png?raw=true',
+                choices: [{ text: 'Ir a la colina del Gran Roble', nextPageIndex: 8 }]
+            },
+            { // 8
+                id: 'pueblo_gran_roble',
+                text: 'Guiado por los grabados, llegas a la colina del Gran Roble. Al estar frente a él, recuerdas otra enseñanza de la anciana: "Cada elección es una rama en el árbol de tu vida". Comprendes que este árbol es la clave.',
+                image: 'https://github.com/juankrev/imagenes-libro-infantil/blob/main/id%20page8_arbol_especial.png?raw=true',
+                choices: [{ text: 'Examinar el árbol de cerca', nextPageIndex: 9 }]
+            },
+            { // 9
+                id: 'pueblo_colina_cofre',
+                text: 'Examinando el árbol, te das cuenta de que sus raíces forman patrones, como si fueran ramas que se hunden en la tierra. Siguiendo el patrón, encuentras un lugar donde la tierra está removida. ¡Excavas y descubres un cofre!',
+                image: 'https://github.com/juankrev/imagenes-libro-infantil/blob/main/id%20%20page10_colina.png?raw=true',
+                choices: [{ text: 'Abrir el cofre', nextPageIndex: 10 }]
+            },
+            { // 10: Climax del Legado del Pueblo
+                id: 'pueblo_final_cofre',
+                text: 'Dentro del cofre encuentras mapas de explorador, pero también fotos y cartas familiares. Una última nota del abuelo dice: "El verdadero tesoro es vivir grandes aventuras sin olvidar nunca de dónde vienes."',
+                image: 'https://github.com/juankrev/imagenes-libro-infantil/blob/main/id%20page33_cofre_revelado.png?raw=true',
+                choices: [{ text: 'El abuelo aparece...', nextPageIndex: 24 }]
+            },
+            // --- PATH 2: LEGADO DEL GUARDIÁN (Se mantiene intacto) ---
+            { // 11
+                id: 'guardian_start',
+                text: 'Sigues un sendero oculto. El abuelo te detiene. "Este camino es diferente, [userName]. Es el del Legado del Guardián. Implica proteger la magia del pueblo. ¿Cómo quieres empezar tu entrenamiento?"',
+                image: 'https://github.com/juankrev/imagenes-libro-infantil/blob/main/id%20page18_guardian_start.png?raw=true',
+                choices: [
+                    { text: 'Preguntar por las leyendas', nextPageIndex: 12 },
+                    { text: 'Preguntar por el deber del Guardián', nextPageIndex: 13 }
+                ]
+            },
+            { // 12
+                id: 'guardian_leyendas',
+                text: '"Las leyendas hablan de criaturas y lugares mágicos", dice. "Tu primera prueba: sigue el rastro del Cuco del Silencio. Te llevará al Árbol de la Verdad."',
+                image: 'https://github.com/juankrev/imagenes-libro-infantil/blob/main/id%20page19_tipo_leyendas.png?raw=true',
+                choices: [{ text: 'Seguir el rastro del Cuco', nextPageIndex: 16 }]
+            },
+            { // 13
+                id: 'guardian_deber',
+                text: '"Ser un Guardián es mantener el equilibrio. Tu primera prueba está en mi diario. Resuelve el acertijo para demostrar tu valía."',
+                image: 'https://github.com/juankrev/imagenes-libro-infantil/blob/main/id%20page20_implicacion_guardian.png?raw=true',
+                choices: [{ text: 'Abrir el diario y leer el acertijo', nextPageIndex: 14 }]
+            },
+            { // 14: Acertijo del Viento
+                id: 'guardian_acertijo_diario',
+                text: 'Abres el diario. Lees: "La Primera Prueba: Encuentra lo que siempre está, pero nunca se ve. Lo que susurra sin boca, y se mueve sin pies." ¿Qué es?',
+                image: 'https://github.com/juankrev/imagenes-libro-infantil/blob/main/id%20%20page23_diario_primera_prueba.png?raw=true',
+                isRiddle: true, correctAnswers: ['el viento', 'viento'], successPage: 15, failurePage: 20
+            },
+            { // 15: Éxito acertijo viento
+                id: 'guardian_acertijo_exito',
+                text: '¡Correcto! Es el viento. Has superado la primera prueba. El diario revela la siguiente: "Demuestra tu generosidad en el Jardín Escondido."',
+                image: 'https://github.com/juankrev/imagenes-libro-infantil/blob/main/id%20page28_acertijo_viento_resuelto.png?raw=true',
+                choices: [{ text: 'Ir al Jardín Escondido', nextPageIndex: 18 }]
+            },
+            { // 16
+                id: 'guardian_rastro_cuco',
+                text: 'Sigues el rastro del ave y llegas a un claro. En el centro, un árbol emite una luz suave. ¡El Árbol de la Verdad!',
+                image: 'https://github.com/juankrev/imagenes-libro-infantil/blob/main/id%20page21_rastro_cuco.png?raw=true',
+                choices: [{ text: 'Esperar el canto del Cuco', nextPageIndex: 17 }]
+            },
+            { // 17
+                id: 'guardian_canto_cuco',
+                text: 'El Cuco canta y tienes una visión: un zorro herido en un jardín. El Árbol de la Verdad te ha mostrado tu siguiente prueba.',
+                image: 'https://github.com/juankrev/imagenes-libro-infantil/blob/main/id%20page25_canto_cuco_verdad.png?raw=true',
+                choices: [{ text: 'Buscar el jardín de la visión', nextPageIndex: 18 }]
+            },
+            { // 18: Prueba de Generosidad
+                id: 'guardian_jardin',
+                text: 'Llegas al Jardín Escondido, donde la mágica Flor de los Deseos está a punto de abrirse. Pero un pequeño zorro con la pata herida te mira con tristeza.',
+                image: 'https://github.com/juankrev/imagenes-libro-infantil/blob/main/id%20page27_jardin_escondido.png?raw=true',
+                choices: [
+                    { text: 'Ayudar al zorro', nextPageIndex: 19 },
+                    { text: 'Ignorar al zorro e ir a por la flor', nextPageIndex: 22 }
+                ]
+            },
+            { // 19: Éxito generosidad
+                id: 'guardian_ayuda_zorro',
+                text: 'Con cuidado, atiendes al zorro. Al hacerlo, la Flor de los Deseos florece por completo, liberando un néctar dorado que te otorga una pieza de un medallón. ¡Has superado la prueba!',
+                image: 'https://github.com/juankrev/imagenes-libro-infantil/blob/main/page30_ayudar_zorro.png?raw=true',
+                choices: [{ text: 'Continuar con el entrenamiento', nextPageIndex: 23 }]
+            },
+            { // 20: Fallo acertijo viento
+                id: 'guardian_acertijo_fallo',
+                text: 'No es la respuesta. El abuelo aparece. "No te preocupes. A veces, la sabiduría no está en acertar, sino en escuchar." Te guía a un viejo pozo.',
+                image: 'https://github.com/juankrev/imagenes-libro-infantil/blob/main/id%20page29_acertijo_viento_fallido.png?raw=true',
+                choices: [{ text: 'Escuchar en el pozo', nextPageIndex: 21 }]
+            },
+            { // 21
+                id: 'guardian_pozo',
+                text: 'Del pozo emana un susurro, el Viento Silente, que te cuenta el acertijo de nuevo. Ahora entiendes. "El viento". Has aprendido la lección. El abuelo te envía a tu siguiente prueba: el Jardín Escondido.',
+                image: 'https://github.com/juankrev/imagenes-libro-infantil/blob/main/id%20page24_abuelo_guia.png?raw=true',
+                choices: [{ text: 'Ir al Jardín Escondido', nextPageIndex: 18 }]
+            },
+            { // 22: Fallo generosidad
+                id: 'guardian_ignora_zorro',
+                text: 'Al ignorar al zorro, la Flor de los Deseos se marchita y el jardín pierde su magia. Has fallado la prueba de la generosidad.',
+                image: 'https://github.com/juankrev/imagenes-libro-infantil/blob/main/id%20page31_apartar_zorro.png?raw=true',
+                choices: [{ text: 'Aprender de la lección', nextPageIndex: 25 }]
+            },
+            { // 23: Climax del Guardián
+                id: 'guardian_reloj_sol',
+                text: 'Con la prueba final superada, el medallón te guía a un antiguo reloj de sol. Al colocarlo en el centro, el reloj proyecta una luz que revela inscripciones mágicas. ¡Has restaurado un punto de poder!',
+                image: 'https://github.com/juankrev/imagenes-libro-infantil/blob/main/id%20page32_reloj_sol_antiguo.png?raw=true',
+                choices: [{ text: 'El abuelo aparece...', nextPageIndex: 24 }]
+            },
+            // --- FINAL PAGES ---
+            { // 24: Final Page
+                id: 'fin_viaje',
+                text: '', // Set dynamically
+                image: 'https://github.com/juankrev/imagenes-libro-infantil/blob/main/id%20%20page11_fin_viaje.png?raw=true',
+                isFinal: true,
+                choices: [{ text: 'Volver a jugar', nextPageIndex: 0 }]
+            },
+            { // 25: Lección Aprendida (Guardian Path)
+                id: 'guardian_leccion',
+                text: 'El abuelo aparece. "No has superado la prueba, pero has aprendido algo más valioso: la empatía. Un Guardián debe tener un corazón noble. Vuelve a intentarlo cuando estés listo."',
+                image: 'https://github.com/juankrev/imagenes-libro-infantil/blob/main/id%20page34_leccion_aprendida.png?raw=true',
+                choices: [{ text: 'Volver a empezar el entrenamiento', nextPageIndex: 11 }]
+            },
+        ];
+
+        // DOM element references
+        const loadingScreen = document.getElementById('loading-screen');
+        const introScreen = document.getElementById('intro-screen');
+        const storyScreen = document.getElementById('story-screen');
+        const userNameInput = document.getElementById('user-name-input');
+        const startStoryBtn = document.getElementById('start-story-btn');
+        const storyImage = document.getElementById('story-image');
+        const storyText = document.getElementById('story-text');
+        const choicesContainer = document.getElementById('choices-container');
+        const magnifierLens = document.getElementById('magnifier-lens');
+        const magnifierHint = document.getElementById('magnifier-hint');
+
+        function saveProgress() {
+            const gameState = { userName, currentPageIndex, pathTaken };
+            localStorage.setItem('abueloSecretStoryProgress_v4', JSON.stringify(gameState));
+        }
+
+        function loadProgress() {
+            const savedProgress = localStorage.getItem('abueloSecretStoryProgress_v4');
+            if (savedProgress) {
+                const data = JSON.parse(savedProgress);
+                userName = data.userName || '';
+                currentPageIndex = data.currentPageIndex || 0;
+                pathTaken = data.pathTaken || '';
+                return true;
+            }
+            return false;
+        }
+        
+        function preloadImages(urls) {
+            urls.forEach(url => { if (url) new Image().src = url; });
+        }
+
+        function showScreen(screenElement) {
+            loadingScreen.classList.add('hidden');
+            introScreen.classList.add('hidden');
+            storyScreen.classList.add('hidden');
+            screenElement.classList.remove('hidden');
+        }
+
+        function renderIntroScreen() {
+            userNameInput.value = '';
+            showScreen(introScreen);
+        }
+
+        function renderStoryPage(pageIndex) {
+            const page = storyData[pageIndex];
+            if (!page) {
+                console.error("Page not found:", pageIndex);
+                return renderStoryPage(0);
+            }
+
+            currentPageIndex = pageIndex;
+            saveProgress();
+
+            if (page.isFinal) {
+                switch(pathTaken) {
+                    case 'pueblo':
+                        page.text = `El abuelo aparece, orgulloso. "¡[userName]! Has unido la aventura con la sabiduría. Has entendido que el mayor legado es vivir nuevas historias sin olvidar nunca de dónde vienes. Eres el **Guardián del Legado del Pueblo**."`;
+                        break;
+                    case 'guardian':
+                        page.text = `El abuelo pone una mano en tu hombro. "Has demostrado tener valor y un corazón puro, [userName]. Has protegido la magia. Ahora eres el **Guardián de las Leyendas**."`;
+                        break;
+                }
+            }
+            
+            storyText.innerHTML = page.text.replace(/\[userName\]/g, `<span class="font-bold text-indigo-700">${userName}</span>`);
+            
+            if (page.image) {
+                storyImage.src = page.image;
+                storyImage.alt = `Imagen de la página: ${page.id}`;
+                storyImage.classList.remove('hidden');
+                storyImage.classList.add('animate-pulse-once');
+                setTimeout(() => storyImage.classList.remove('animate-pulse-once'), 500);
+            } else {
+                storyImage.src = '';
+                storyImage.classList.add('hidden');
+            }
+
+            choicesContainer.innerHTML = '';
+
+            if (page.isRiddle) {
+                const riddleInput = document.createElement('input');
+                riddleInput.type = 'text';
+                riddleInput.placeholder = 'Escribe tu respuesta aquí...';
+                riddleInput.className = 'w-full max-w-xs px-4 py-2 rounded-lg border-2 border-blue-300 focus:outline-none focus:border-blue-500 transition-all duration-200 text-lg shadow-sm mb-4';
+                choicesContainer.appendChild(riddleInput);
+
+                const submitButton = document.createElement('button');
+                submitButton.textContent = 'Enviar Respuesta';
+                submitButton.className = 'bg-gradient-to-r from-green-500 to-teal-600 hover:from-green-600 hover:to-teal-700 text-white font-fredoka py-3 px-6 rounded-full shadow-lg transition-all duration-300 transform hover:scale-105 active:scale-95 mx-2 my-1 border-b-4 border-green-700 text-sm md:text-base';
+                
+                submitButton.onclick = () => {
+                    const answer = riddleInput.value.trim().toLowerCase();
+                    renderStoryPage(page.correctAnswers.includes(answer) ? page.successPage : page.failurePage);
+                };
+                choicesContainer.appendChild(submitButton);
+            } else if (page.choices) {
+                page.choices.forEach(choice => {
+                    const choiceBtn = document.createElement('button');
+                    choiceBtn.className = 'bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white font-fredoka py-3 px-6 rounded-full shadow-lg transition-all duration-300 transform hover:scale-105 active:scale-95 mx-2 my-1 border-b-4 border-purple-700 hover:border-indigo-800 text-sm md:text-base';
+                    choiceBtn.textContent = choice.text;
+                    choiceBtn.onclick = () => {
+                        if (choice.nextPageIndex === 0) {
+                            currentPageIndex = 0;
+                            pathTaken = '';
+                            userName = '';
+                            saveProgress();
+                            renderIntroScreen();
+                        } else {
+                            if (choice.path) pathTaken = choice.path;
+                            renderStoryPage(choice.nextPageIndex);
+                        }
+                    };
+                    choicesContainer.appendChild(choiceBtn);
+                });
+            }
+            
+            showScreen(storyScreen);
+            setupMagnifier(page);
+            
+            const imagesToPreload = page.choices ? page.choices.map(c => storyData[c.nextPageIndex]?.image).filter(Boolean) : [];
+            preloadImages(imagesToPreload);
+        }
+
+        function setupMagnifier(page) {
+            const storyImageWrapper = storyImage.parentElement;
+            let isMagnifying = false;
+
+            storyImageWrapper.onmousedown = storyImageWrapper.onmousemove = storyImageWrapper.onmouseup = storyImageWrapper.onmouseleave = storyImageWrapper.ontouchstart = storyImageWrapper.ontouchmove = storyImageWrapper.ontouchend = null;
+            magnifierLens.classList.remove('active');
+            magnifierHint.style.display = 'none';
+
+            if (page.image) {
+                magnifierHint.style.display = 'block';
+                storyImage.onload = () => {
+                    const zoomFactor = 1.5;
+                    magnifierLens.style.backgroundImage = `url('${page.image}')`;
+                    magnifierLens.style.backgroundSize = `${storyImage.naturalWidth * zoomFactor}px ${storyImage.naturalHeight * zoomFactor}px`;
+
+                    const moveMagnifier = (clientX, clientY) => {
+                        const imgRect = storyImage.getBoundingClientRect();
+                        const wrapperRect = storyImageWrapper.getBoundingClientRect();
+                        let x = clientX - imgRect.left;
+                        let y = clientY - imgRect.top;
+                        magnifierLens.style.left = `${clientX - wrapperRect.left}px`;
+                        magnifierLens.style.top = `${clientY - wrapperRect.top}px`;
+                        const ratioX = storyImage.naturalWidth / storyImage.offsetWidth;
+                        const ratioY = storyImage.naturalHeight / storyImage.offsetHeight;
+                        magnifierLens.style.backgroundPosition = `-${x * ratioX * zoomFactor - 75}px -${y * ratioY * zoomFactor - 75}px`;
+                    };
+
+                    const startMagnifying = (e) => {
+                        isMagnifying = true;
+                        magnifierLens.classList.add('active');
+                        if (e.touches) e.preventDefault();
+                    };
+                    const stopMagnifying = () => { isMagnifying = false; magnifierLens.classList.remove('active'); };
+
+                    storyImageWrapper.onmousedown = startMagnifying;
+                    storyImageWrapper.onmouseup = stopMagnifying;
+                    storyImageWrapper.onmouseleave = stopMagnifying;
+                    storyImageWrapper.onmousemove = (e) => { if (isMagnifying) moveMagnifier(e.clientX, e.clientY); };
+                    storyImageWrapper.ontouchstart = startMagnifying;
+                    storyImageWrapper.ontouchend = stopMagnifying;
+                    storyImageWrapper.ontouchmove = (e) => { if (isMagnifying) moveMagnifier(e.touches[0].clientX, e.touches[0].clientY); };
+                };
+                storyImage.onerror = () => storyImage.src = 'https://placehold.co/600x400/FF0000/FFFFFF?text=Error';
+            }
+        }
+
+        function alertMessage(message) {
+            const messageBox = document.createElement('div');
+            messageBox.className = 'fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4';
+            messageBox.innerHTML = `<div class="bg-gradient-to-br from-yellow-300 to-orange-400 rounded-lg p-6 shadow-2xl max-w-sm w-full text-center relative border-4 border-yellow-500 transform scale-0 animate-scale-in"><p class="text-gray-800 text-xl font-fredoka mb-4">${message}</p><button id="close-message-btn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-full shadow-md transition-all duration-300 transform hover:scale-105">Cerrar</button></div>`;
+            document.body.appendChild(messageBox);
+            document.getElementById('close-message-btn').onclick = () => {
+                const msgBoxInner = messageBox.querySelector('div');
+                msgBoxInner.classList.add('animate-scale-out');
+                msgBoxInner.addEventListener('animationend', () => document.body.removeChild(messageBox), { once: true });
+            };
+        }
+
+        window.onload = () => {
+            showScreen(loadingScreen);
+            if (loadProgress() && userName && currentPageIndex !== 0) {
+                renderStoryPage(currentPageIndex);
+            } else {
+                currentPageIndex = 0;
+                pathTaken = '';
+                renderIntroScreen();
+            }
+
+            startStoryBtn.addEventListener('click', () => {
+                userName = userNameInput.value.trim();
+                if (userName === '') {
+                    return alertMessage('Por favor, ingresa tu nombre para comenzar la aventura.');
+                }
+                renderStoryPage(1);
+            });
+        };
+    </script>
+</head>
+<body class="font-sans antialiased bg-gradient-to-br from-blue-200 to-purple-200 flex items-center justify-center min-h-screen p-4 text-gray-800">
+    <div id="app" class="relative w-full max-w-3xl bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col items-center justify-center h-screen border-8 border-yellow-400">
+        <div id="loading-screen" class="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-blue-400 to-indigo-500 text-white z-20 rounded-2xl">
+            <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-white mb-4"></div>
+            <p class="text-xl font-semibold font-fredoka">Cargando la aventura...</p>
+        </div>
+        <div id="intro-screen" class="hidden flex-col items-center justify-center p-8 text-center w-full h-full z-10">
+            <h1 class="text-4xl sm:text-5xl font-fredoka text-indigo-700 mb-6 drop-shadow-md leading-tight">¡Tu Aventura en el Pueblo del Abuelo!</h1>
+            <p class="text-lg text-gray-700 mb-8 max-w-prose">Antes de iniciar tu viaje, dinos quién eres.</p>
+            <div class="w-full max-w-md bg-white p-6 rounded-2xl shadow-xl border border-gray-200">
+                <div class="mb-6">
+                    <label for="user-name-input" class="block text-gray-700 text-lg font-semibold mb-2">Tu Nombre:</label>
+                    <input type="text" id="user-name-input" placeholder="Ej: Sofía o Eiden" class="w-full px-4 py-3 rounded-xl border-2 border-blue-300 focus:outline-none focus:border-blue-500 transition-all duration-200 text-lg shadow-sm">
+                </div>
+                <button id="start-story-btn" class="w-full bg-gradient-to-r from-green-500 to-teal-600 hover:from-green-600 hover:to-teal-700 text-white font-fredoka py-4 px-8 rounded-full shadow-lg transform transition-all duration-300 hover:scale-105 active:active:scale-95 focus:outline-none focus:ring-4 focus:ring-green-300 border-b-4 border-green-700">
+                    ¡Comenzar la Aventura!
+                </button>
+            </div>
+        </div>
+        <div id="story-screen" class="hidden w-full h-full flex flex-col justify-between items-center p-4 sm:p-6 md:p-8 relative">
+            <div class="relative w-full aspect-square max-w-[65vh] mx-auto mb-4 rounded-2xl overflow-hidden shadow-xl border-4 border-blue-300 group bg-blue-50">
+                <img id="story-image" src="" alt="Imagen de la historia" class="w-full h-full object-contain">
+                <div id="magnifier-lens"></div>
+                <div id="magnifier-hint" class="absolute bottom-4 right-4 bg-gray-800 bg-opacity-75 text-white text-sm font-semibold px-3 py-2 rounded-lg shadow-lg pointer-events-none">
+                    Mantén pulsado para usar la lupa 🔍
+                </div>
+            </div>
+            <div class="w-full bg-blue-50 bg-opacity-95 p-3 sm:p-4 rounded-2xl shadow-inner border border-blue-200 mb-4 text-center h-[20vh] overflow-y-auto custom-scrollbar">
+                <p id="story-text" class="text-base md:text-lg leading-relaxed text-gray-800 font-open-sans"></p>
+            </div>
+            <div id="choices-container" class="flex flex-wrap justify-center gap-2 w-full flex-shrink-0">
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+
