@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>El Secreto del Abuelo</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Custom fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Open Sans', sans-serif; }
+        h1, .font-fredoka { font-family: 'Fredoka One', cursive; }
+        /* Custom scrollbar styles */
+        .custom-scrollbar::-webkit-scrollbar { width: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #e0f2f7; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #80DEEA; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #4DD0E1; }
+        /* Animation for image loading */
+        @keyframes pulse-once {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.03); }
+            100% { transform: scale(1); }
+        }
+        .animate-pulse-once { animation: pulse-once 0.5s ease-out; }
+        /* Animations for custom message system */
+        @keyframes scale-in {
+            from { transform: scale(0); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+        @keyframes scale-out {
+            from { transform: scale(1); opacity: 1; }
+            to { transform: scale(0); opacity: 0; }
+        }
+        .animate-scale-in { animation: scale-in 0.3s ease-out forwards; }
+        .animate-scale-out { animation: scale-out 0.3s ease-in forwards; }
+        /* Styles for the magnifier lens */
+        #magnifier-lens {
+            width: 150px; height: 150px;
+            border-radius: 50%;
+            border: 4px solid #3b82f6;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+            position: absolute;
+            pointer-events: none;
+            overflow: hidden;
+            background-repeat: no-repeat;
+            transform: translate(-50%, -50%);
+            transition: opacity 0.2s ease-in-out;
+            opacity: 0;
+            background-color: rgba(255, 255, 255, 0.1);
+            cursor: none;
+        }
+        #magnifier-lens.active { opacity: 1; }
+        /* Styles for the intro screen background */
+        #intro-screen {
+            background-image: url('https://github.com/juankrev/imagenes-libro-infantil/blob/main/id%20intro.png?raw=true');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            position: relative;
+        }
+        #intro-screen::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background-color: rgba(0, 0, 0, 0.4);
+            border-radius: 2rem;
+            z-index: 0;
+        }
+        #intro-screen > * { position: relative; z-index: 1; }
+        #intro-screen h1, #intro-screen p, #intro-screen label {
+            color: white;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+        #intro-screen .bg-white {
+            background-color: rgba(255, 255, 255, 0.85);
+            color: #333;
+        }
+        #intro-screen .bg-white label {
+            color: #333;
+            text-shadow: none;
+        }
+    </style>
+    <script type="module">
+        // Game state variables
+        let userName = '';
+        let currentPageIndex = 0;
+        let pathTaken = ''; // 'adventure' or 'wisdom'
+
+        // NEW: Unified story data structure
+        const storyData = [
+            { // 0
+                id: 'intro',
+                text: 'Bienvenido a "El Secreto del Abuelo: Un Viaje a Raíces Perdidas". Antes de comenzar, cuéntanos, ¿cómo te llamas para que podamos empezar la aventura?',
+                image: '', // No image, uses background
+            },
+            { // 1
+                id: 'page1_mapa',
+                text: 'El abuelo, con una sonrisa misteriosa, te recibe. "¡Bienvenido, [userName]! Te entrego este mapa. Para descubrir mi secreto, deberás seguir las raíces de nuestra historia. ¿Qué camino eliges para empezar: el de la aventura o el de la sabiduría?"',
+                image: 'https://github.com/juankrev/imagenes-libro-infantil/blob/main/id%20page1_mapa.png?raw=true',
+                choices: [
+                    { text: 'Seguir el sendero del río (Aventura)', nextPageIndex: 2, path: 'adventure' },
+                    { text: 'Visitar la plaza del pueblo (Sabiduría)', nextPageIndex: 3, path: 'wisdom' }
+                ]
+            },
+            // --- Adventure Path ---
+            { // 2
+                id: 'page2_rio_aventura',
+                text: 'Decides seguir el río. El sonido del agua y la naturaleza te rodean. Cerca de la orilla, ves algo brillante que te llama la atención. Es una moneda antigua y pesada.',
+                image: 'https://github.com/juankrev/imagenes-libro-infantil/blob/main/id%20page12_moneda_antigua.png?raw=true', // Reusing image
+                choices: [
+                    { text: 'Llevar la moneda a la plaza', nextPageIndex: 4 }
+                ]
+            },
+            // --- Wisdom Path ---
+            { // 3
+                id: 'page3_plaza_sabiduria',
+                text: 'Llegas a la plaza, el corazón del pueblo. Una anciana te sonríe desde su puesto de flores. Te acercas y le preguntas por las historias del pueblo y del abuelo.',
+                image: 'https://github.com/juankrev/imagenes-libro-infantil/blob/main/id%20page3_plaza.png?raw=true',
+                choices: [
+                    { text: 'Escuchar la historia de la anciana', nextPageIndex: 5 }
+                ]
+            },
+            // --- Convergence Point 1: The Old Woman ---
+            { // 4 (From Adventure Path)
+                id: 'page13_anciana_moneda',
+                text: 'Le muestras la moneda a la anciana. Sus ojos brillan. "¡Una moneda de explorador! Tu abuelo era igual. Me dijo que si alguien la encontraba, debía resolver este acertijo para entender el valor de los hallazgos: Soy ligero como una pluma, pero nadie puede sostenerme mucho tiempo. ¿Qué soy?"',
+                image: 'https://github.com/juankrev/imagenes-libro-infantil/blob/main/id%20page13_anciana_moneda.png?raw=true',
+                isRiddle: true,
+                correctAnswers: ['el aliento', 'aliento'],
+                successPage: 6,
+                failurePage: 7
+            },
+            { // 5 (From Wisdom Path)
+                id: 'page5_anciana_sabiduria',
+                text: 'La anciana sonríe. "El secreto de tu abuelo está atado a las raíces del Gran Roble Sabio. Pero para entenderlo, debes resolver este acertijo: Susurro sin boca y me muevo sin pies. Siempre estoy, pero nunca me ves. ¿Qué soy?"',
+                image: 'https://github.com/juankrev/imagenes-libro-infantil/blob/main/id%20page5_anciana.png?raw=true',
+                isRiddle: true,
+                correctAnswers: ['el viento', 'viento'],
+                successPage: 6,
+                failurePage: 7
+            },
+            // --- Convergence Point 2: The Revelation ---
+            { // 6 (Success on either riddle)
+                id: 'page16_acertijo_resuelto',
+                text: '¡Correcto, [userName]! La anciana asiente con aprobación. "Has demostrado tener la perspicacia necesaria. El camino te ha preparado. Ahora, ve a la colina donde se alza el Gran Roble Sabio. Allí, las raíces de tu historia esperan ser descubiertas."',
+                image: 'https://github.com/juankrev/imagenes-libro-infantil/blob/main/id%20%20page16_pasaje_resuelto.png?raw=true',
+                choices: [
+                    { text: 'Ir a la colina del Gran Roble', nextPageIndex: 8 }
+                ]
+            },
+            { // 7 (Failure on either riddle)
+                id: 'page17_acertijo_fallido',
+                text: 'La anciana niega con la cabeza. "Esa no es la respuesta. Pero no te preocupes, el verdadero aprendizaje está en el viaje." Te anima a que vayas de todas formas al Gran Roble. "Quizás la respuesta no estaba en las palabras, sino en lo que verás allí."',
+                image: 'https://github.com/juankrev/imagenes-libro-infantil/blob/main/id%20page17_acertijo_fallido.png?raw=true',
+                choices: [
+                    { text: 'Ir a la colina del Gran Roble', nextPageIndex: 8 }
+                ]
+            },
+            // --- The Climax ---
+            { // 8
+                id: 'page10_colina',
+                text: 'En la cima de la colina, el imponente Gran Roble Sabio se alza. Bajo sus raíces más antiguas y retorcidas, tus ojos se posan en un pequeño cofre de madera, casi oculto por el musgo. Con manos temblorosas, lo desentierras, sintiendo la emoción del descubrimiento.',
+                image: 'https://github.com/juankrev/imagenes-libro-infantil/blob/main/id%20%20page10_colina.png?raw=true',
+                choices: [
+                    { text: 'Abrir el cofre', nextPageIndex: 9 }
+                ]
+            },
+            { // 9
+                id: 'page33_cofre_revelado',
+                text: 'Dentro del cofre, no hay joyas ni oro, sino un tesoro mucho más valioso: fotografías antiguas, cartas con historias de risas y desafíos, y un diario que narra la increíble vida de tu linaje en el pueblo. Es la rica y emotiva herencia de tu familia.',
+                image: 'https://github.com/juankrev/imagenes-libro-infantil/blob/main/id%20page33_cofre_revelado.png?raw=true',
+                choices: [
+                    { text: 'Reflexionar sobre el descubrimiento', nextPageIndex: 10 }
+                ]
+            },
+            // --- The Final Page ---
+            { // 10
+                id: 'page11_fin_viaje',
+                text: '', // This text will be set dynamically
+                image: 'https://github.com/juankrev/imagenes-libro-infantil/blob/main/id%20%20page11_fin_viaje.png?raw=true',
+                isFinal: true,
+                choices: [
+                    { text: 'Volver a jugar', nextPageIndex: 0 }
+                ]
+            }
+        ];
+
+        // DOM element references
+        const appContainer = document.getElementById('app');
+        const loadingScreen = document.getElementById('loading-screen');
+        const introScreen = document.getElementById('intro-screen');
+        const storyScreen = document.getElementById('story-screen');
+        const userNameInput = document.getElementById('user-name-input');
+        const startStoryBtn = document.getElementById('start-story-btn');
+        const storyImage = document.getElementById('story-image');
+        const storyText = document.getElementById('story-text');
+        const choicesContainer = document.getElementById('choices-container');
+        const magnifierLens = document.getElementById('magnifier-lens');
+        const magnifierHint = document.getElementById('magnifier-hint');
+
+        // --- Progress Saving/Loading Functions ---
+        function saveProgress() {
+            const gameState = {
+                userName: userName,
+                currentPageIndex: currentPageIndex,
+                pathTaken: pathTaken
+            };
+            try {
+                localStorage.setItem('abueloSecretStoryProgress_v2', JSON.stringify(gameState));
+            } catch (error) {
+                console.error("Error saving progress:", error);
+            }
+        }
+
+        function loadProgress() {
+            try {
+                const savedProgress = localStorage.getItem('abueloSecretStoryProgress_v2');
+                if (savedProgress) {
+                    const data = JSON.parse(savedProgress);
+                    userName = data.userName || '';
+                    currentPageIndex = data.currentPageIndex || 0;
+                    pathTaken = data.pathTaken || '';
+                    return true;
+                }
+                return false;
+            } catch (error) {
+                console.error("Error loading progress:", error);
+                return false;
+            }
+        }
+        
+        // --- Image Preloading ---
+        function preloadImages(urls) {
+            urls.forEach(url => {
+                if (url) {
+                    const img = new Image();
+                    img.src = url;
+                }
+            });
+        }
+
+        // --- UI Functions ---
+        function showScreen(screenElement) {
+            loadingScreen.classList.add('hidden');
+            introScreen.classList.add('hidden');
+            storyScreen.classList.add('hidden');
+            screenElement.classList.remove('hidden');
+        }
+
+        function renderIntroScreen() {
+            userNameInput.value = userName;
+            showScreen(introScreen);
+        }
+
+        function renderStoryPage(pageIndex) {
+            const page = storyData[pageIndex];
+            if (!page) {
+                console.error("Page not found:", pageIndex);
+                renderStoryPage(0); // Go back to intro on error
+                return;
+            }
+
+            currentPageIndex = pageIndex;
+            saveProgress();
+
+            // --- Dynamic Final Page Logic ---
+            if (page.isFinal) {
+                if (pathTaken === 'adventure') {
+                    page.text = `El abuelo aparece y te abraza. "¡[userName], lo has encontrado! Al igual que yo en mis días de explorador, has seguido las pistas y has desenterrado nuestro pasado. Como ves, el mayor tesoro no son los objetos, sino las **historias de aventuras** que contienen. Ahora eres el guardián de las hazañas de nuestra familia."`;
+                } else { // 'wisdom' path
+                    page.text = `El abuelo aparece y te mira con orgullo. "¡[userName], lo has logrado! Has escuchado la sabiduría del pueblo y has entendido que nuestras raíces están aquí. Este cofre no guarda oro, sino **recuerdos**, que son el verdadero tesoro. Has aprendido que el secreto es cuidar de nuestra historia. Ahora eres el guardián de la memoria de nuestra familia."`;
+                }
+            }
+
+            storyText.innerHTML = page.text.replace(/\[userName\]/g, `<span class="font-bold text-indigo-700">${userName}</span>`);
+            
+            if (page.image) {
+                storyImage.src = page.image;
+                storyImage.alt = `Imagen de la página: ${page.id}`;
+                storyImage.classList.remove('hidden');
+                storyImage.classList.add('animate-pulse-once');
+                setTimeout(() => storyImage.classList.remove('animate-pulse-once'), 500);
+            } else {
+                storyImage.src = '';
+                storyImage.classList.add('hidden');
+            }
+
+            choicesContainer.innerHTML = '';
+
+            // --- Riddle Logic ---
+            if (page.isRiddle) {
+                const riddleInput = document.createElement('input');
+                riddleInput.type = 'text';
+                riddleInput.placeholder = 'Escribe tu respuesta aquí...';
+                riddleInput.className = 'w-full max-w-xs px-4 py-2 rounded-lg border-2 border-blue-300 focus:outline-none focus:border-blue-500 transition-all duration-200 text-lg shadow-sm mb-4';
+                choicesContainer.appendChild(riddleInput);
+
+                const submitButton = document.createElement('button');
+                submitButton.textContent = 'Enviar Respuesta';
+                submitButton.className = 'bg-gradient-to-r from-green-500 to-teal-600 hover:from-green-600 hover:to-teal-700 text-white font-fredoka py-3 px-6 rounded-full shadow-lg transition-all duration-300 transform hover:scale-105 active:scale-95 mx-2 my-1 border-b-4 border-green-700 text-sm md:text-base';
+                
+                submitButton.onclick = () => {
+                    const answer = riddleInput.value.trim().toLowerCase();
+                    if (page.correctAnswers.includes(answer)) {
+                        renderStoryPage(page.successPage);
+                    } else {
+                        renderStoryPage(page.failurePage);
+                    }
+                };
+                choicesContainer.appendChild(submitButton);
+            } else {
+                // --- Standard Choices Logic ---
+                if (page.choices && page.choices.length > 0) {
+                    page.choices.forEach(choice => {
+                        const choiceBtn = document.createElement('button');
+                        choiceBtn.className = 'bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white font-fredoka py-3 px-6 rounded-full shadow-lg transition-all duration-300 transform hover:scale-105 active:scale-95 mx-2 my-1 border-b-4 border-purple-700 hover:border-indigo-800 text-sm md:text-base';
+                        choiceBtn.textContent = choice.text;
+                        choiceBtn.onclick = () => {
+                            // FIX: Special handling for the "Play Again" button
+                            if (choice.nextPageIndex === 0) {
+                                // Reset the game state for a fresh start
+                                currentPageIndex = 0;
+                                pathTaken = '';
+                                userName = '';
+                                saveProgress(); // Save the reset state
+                                renderIntroScreen(); // Go back to the proper intro screen
+                            } else {
+                                // Normal navigation
+                                if (choice.path) {
+                                    pathTaken = choice.path;
+                                }
+                                renderStoryPage(choice.nextPageIndex);
+                            }
+                        };
+                        choicesContainer.appendChild(choiceBtn);
+                    });
+                }
+            }
+            
+            showScreen(storyScreen);
+            setupMagnifier(page);
+            
+            // Preload next images
+            const imagesToPreload = [];
+            if (page.choices) {
+                page.choices.forEach(choice => {
+                    const nextPage = storyData[choice.nextPageIndex];
+                    if (nextPage && nextPage.image) {
+                        imagesToPreload.push(nextPage.image);
+                    }
+                });
+            }
+            preloadImages(imagesToPreload);
+        }
+
+        // --- Magnifier Logic ---
+        function setupMagnifier(page) {
+            const storyImageWrapper = storyImage.parentElement;
+            const zoomFactor = 1.5;
+            let isMagnifying = false;
+
+            // Clear previous listeners
+            storyImageWrapper.onmousedown = null;
+            storyImageWrapper.onmousemove = null;
+            storyImageWrapper.onmouseup = null;
+            storyImageWrapper.onmouseleave = null;
+            storyImageWrapper.ontouchstart = null;
+            storyImageWrapper.ontouchmove = null;
+            storyImageWrapper.ontouchend = null;
+            
+            magnifierLens.classList.remove('active');
+            magnifierHint.style.display = 'none';
+
+            if (page.image) {
+                magnifierHint.style.display = 'block';
+                storyImage.onload = () => {
+                    magnifierLens.style.backgroundImage = `url('${page.image}')`;
+                    magnifierLens.style.backgroundSize = `${storyImage.naturalWidth * zoomFactor}px ${storyImage.naturalHeight * zoomFactor}px`;
+
+                    const moveMagnifier = (clientX, clientY) => {
+                        const imgRect = storyImage.getBoundingClientRect();
+                        const wrapperRect = storyImageWrapper.getBoundingClientRect();
+                        
+                        let x = clientX - imgRect.left;
+                        let y = clientY - imgRect.top;
+
+                        magnifierLens.style.left = `${clientX - wrapperRect.left}px`;
+                        magnifierLens.style.top = `${clientY - wrapperRect.top}px`;
+
+                        const ratioX = storyImage.naturalWidth / storyImage.offsetWidth;
+                        const ratioY = storyImage.naturalHeight / storyImage.offsetHeight;
+                        const lensWidth = magnifierLens.offsetWidth;
+                        const lensHeight = magnifierLens.offsetHeight;
+
+                        let bgX = -(x * ratioX * zoomFactor - lensWidth / 2);
+                        let bgY = -(y * ratioY * zoomFactor - lensHeight / 2);
+
+                        magnifierLens.style.backgroundPosition = `${bgX}px ${bgY}px`;
+                    };
+
+                    const startMagnifying = (e) => {
+                        isMagnifying = true;
+                        magnifierLens.classList.add('active');
+                        storyImageWrapper.style.cursor = 'none';
+                        if (e.touches) e.preventDefault();
+                    };
+
+                    const stopMagnifying = () => {
+                        isMagnifying = false;
+                        magnifierLens.classList.remove('active');
+                        storyImageWrapper.style.cursor = 'default';
+                    };
+
+                    storyImageWrapper.onmousedown = startMagnifying;
+                    storyImageWrapper.onmouseup = stopMagnifying;
+                    storyImageWrapper.onmouseleave = stopMagnifying;
+                    storyImageWrapper.onmousemove = (e) => {
+                        if (isMagnifying) moveMagnifier(e.clientX, e.clientY);
+                    };
+
+                    storyImageWrapper.ontouchstart = startMagnifying;
+                    storyImageWrapper.ontouchend = stopMagnifying;
+                    storyImageWrapper.ontouchmove = (e) => {
+                        if (isMagnifying && e.touches.length === 1) {
+                            moveMagnifier(e.touches[0].clientX, e.touches[0].clientY);
+                            e.preventDefault();
+                        }
+                    };
+                };
+                storyImage.onerror = () => {
+                    console.error(`Error loading image: ${page.image}`);
+                    storyImage.src = 'https://placehold.co/600x400/FF0000/FFFFFF?text=Error+Cargando+Imagen';
+                };
+            }
+        }
+
+        // --- Custom Message System ---
+        function alertMessage(message) {
+            const messageBox = document.createElement('div');
+            messageBox.className = 'fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4';
+            messageBox.innerHTML = `
+                <div class="bg-gradient-to-br from-yellow-300 to-orange-400 rounded-lg p-6 shadow-2xl max-w-sm w-full text-center relative border-4 border-yellow-500 transform scale-0 animate-scale-in">
+                    <p class="text-gray-800 text-xl font-fredoka mb-4">${message}</p>
+                    <button id="close-message-btn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-full shadow-md transition-all duration-300 transform hover:scale-105">Cerrar</button>
+                </div>
+            `;
+            document.body.appendChild(messageBox);
+
+            document.getElementById('close-message-btn').onclick = () => {
+                const msgBoxInner = messageBox.querySelector('div');
+                msgBoxInner.classList.remove('animate-scale-in');
+                msgBoxInner.classList.add('animate-scale-out');
+                msgBoxInner.addEventListener('animationend', () => {
+                    document.body.removeChild(messageBox);
+                }, { once: true });
+            };
+        }
+
+        // --- App Initialization ---
+        window.onload = () => {
+            showScreen(loadingScreen);
+            if (loadProgress() && userName && currentPageIndex !== 0) {
+                renderStoryPage(currentPageIndex);
+            } else {
+                currentPageIndex = 0;
+                pathTaken = '';
+                renderIntroScreen();
+            }
+
+            startStoryBtn.addEventListener('click', () => {
+                userName = userNameInput.value.trim();
+                if (userName === '') {
+                    alertMessage('Por favor, ingresa tu nombre para comenzar la aventura.');
+                    return;
+                }
+                currentPageIndex = 1;
+                renderStoryPage(currentPageIndex);
+            });
+        };
+    </script>
+</head>
+<body class="font-sans antialiased bg-gradient-to-br from-blue-200 to-purple-200 flex items-center justify-center min-h-screen p-4 text-gray-800">
+
+    <div id="app" class="relative w-full max-w-3xl bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col items-center justify-center h-screen border-8 border-yellow-400">
+
+        <!-- Loading Screen -->
+        <div id="loading-screen" class="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-blue-400 to-indigo-500 text-white z-20 rounded-2xl">
+            <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-white mb-4"></div>
+            <p class="text-xl font-semibold font-fredoka">Cargando la aventura...</p>
+        </div>
+
+        <!-- Intro Screen -->
+        <div id="intro-screen" class="hidden flex-col items-center justify-center p-8 text-center w-full h-full z-10">
+            <h1 class="text-4xl sm:text-5xl font-fredoka text-indigo-700 mb-6 drop-shadow-md leading-tight">¡Tu Aventura en el Pueblo del Abuelo!</h1>
+            <p class="text-lg text-gray-700 mb-8 max-w-prose">Antes de iniciar tu viaje, dinos quién eres.</p>
+            <div class="w-full max-w-md bg-white p-6 rounded-2xl shadow-xl border border-gray-200">
+                <div class="mb-6">
+                    <label for="user-name-input" class="block text-gray-700 text-lg font-semibold mb-2">Tu Nombre:</label>
+                    <input type="text" id="user-name-input" placeholder="Ej: Sofía o Eiden"
+                           class="w-full px-4 py-3 rounded-xl border-2 border-blue-300 focus:outline-none focus:border-blue-500 transition-all duration-200 text-lg shadow-sm">
+                </div>
+                <button id="start-story-btn"
+                        class="w-full bg-gradient-to-r from-green-500 to-teal-600 hover:from-green-600 hover:to-teal-700 text-white font-fredoka py-4 px-8 rounded-full shadow-lg transform transition-all duration-300 hover:scale-105 active:active:scale-95 focus:outline-none focus:ring-4 focus:ring-green-300 border-b-4 border-green-700">
+                    ¡Comenzar la Aventura!
+                </button>
+            </div>
+        </div>
+
+        <!-- Main Story Screen -->
+        <div id="story-screen" class="hidden w-full h-full flex flex-col justify-between items-center p-4 sm:p-6 md:p-8 relative">
+            <!-- Image Container -->
+            <div class="relative w-full aspect-square max-w-[65vh] mx-auto mb-4 rounded-2xl overflow-hidden shadow-xl border-4 border-blue-300 group bg-blue-50">
+                <img id="story-image" src="" alt="Imagen de la historia" class="w-full h-full object-contain">
+                <!-- Magnifier Lens -->
+                <div id="magnifier-lens"></div>
+                <!-- Magnifier Hint -->
+                <div id="magnifier-hint" class="absolute bottom-4 right-4 bg-gray-800 bg-opacity-75 text-white text-sm font-semibold px-3 py-2 rounded-lg shadow-lg pointer-events-none">
+                    Mantén pulsado para usar la lupa 🔍
+                </div>
+            </div>
+
+            <!-- Story Text Panel -->
+            <div class="w-full bg-blue-50 bg-opacity-95 p-3 sm:p-4 rounded-2xl shadow-inner border border-blue-200 mb-4 text-center h-[20vh] overflow-y-auto custom-scrollbar">
+                <p id="story-text" class="text-base md:text-lg leading-relaxed text-gray-800 font-open-sans"></p>
+            </div>
+
+            <!-- Choices Container -->
+            <div id="choices-container" class="flex flex-wrap justify-center gap-2 w-full flex-shrink-0">
+                <!-- Choices will be added here dynamically -->
+            </div>
+        </div>
+
+    </div>
+
+</body>
+</html>
